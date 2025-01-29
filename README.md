@@ -1,7 +1,7 @@
 # 🚀 XAMPP for Termux
 
 <div align="center">
-  <img src="assets/xampp-logo.png" alt="XAMPP Termux Logo" width="200"/>
+  <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTeBr8B8nBG3QP5UIoWaS7xNXhXHrKAkmLsZA&s" alt="XAMPP Termux Logo" width="200"/>
   
   [![Version](https://img.shields.io/badge/version-2.1.0-blue.svg)](https://github.com/likhonsheikhcodes/XAMPP-Termux)
   [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
