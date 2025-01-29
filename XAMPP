@@ -1,0 +1,231 @@
+#!/bin/bash
+
+# XAMPP for Termux
+# Author: Likhon Sheikh
+# Version: 2.1.0
+# GitHub: https://github.com/likhonsheikhcodes/XAMPP-Termux
+
+# Color definitions with modern ANSI codes
+declare -A colors=(
+    ["reset"]="\033[0m"
+    ["bold"]="\033[1m"
+    ["dim"]="\033[2m"
+    ["red"]="\033[38;5;196m"
+    ["green"]="\033[38;5;46m"
+    ["blue"]="\033[38;5;39m"
+    ["yellow"]="\033[38;5;226m"
+    ["purple"]="\033[38;5;171m"
+    ["cyan"]="\033[38;5;51m"
+    ["orange"]="\033[38;5;214m"
+)
+
+# Configuration
+VERSION="2.1.0"
+AUTHOR="Likhon Sheikh"
+GITHUB_URL="https://github.com/likhonsheikhcodes/XAMPP-Termux"
+DOCS_URL="https://xampp-termux.vercel.app"
+
+# Directory Structure
+BASE_DIR="${PREFIX}"
+XAMPP_HOME="${BASE_DIR}/share/xampp"
+CONF_DIR="${BASE_DIR}/etc/xampp"
+LOG_DIR="${BASE_DIR}/var/log/xampp"
+WWW_DIR="${XAMPP_HOME}/www"
+BACKUP_DIR="${XAMPP_HOME}/backups"
+VHOSTS_DIR="${CONF_DIR}/vhosts"
+SSL_DIR="${CONF_DIR}/ssl"
+
+# Port Configuration
+declare -A PORTS=(
+    ["php"]="8080"
+    ["mysql"]="3306"
+    ["apache"]="8081"
+    ["nginx"]="8082"
+    ["phpmyadmin"]="8083"
+)
+
+# Modern ASCII Art Banner
+show_banner() {
+    clear
+    echo -e "${colors[blue]}"
+    echo "╔═╗╔═╗╔═╗╔╦╗╔═╗╔═╗"
+    echo "╚═╗╠═╣║╣  ║ ║ ║║╣ "
+    echo "╚═╝╩ ╩╚═╝ ╩ ╚═╝╚═╝"
+    echo -e "${colors[purple]}┌────────────────────────────┐"
+    echo -e "│  Modern XAMPP for Termux   │"
+    echo -e "│  Version: ${VERSION}           │"
+    echo -e "│  By: ${AUTHOR}        │"
+    echo -e "└────────────────────────────┘${colors[reset]}"
+    echo
+}
+
+# Enhanced Progress Bar
+progress_bar() {
+    local duration=$1
+    local steps=20
+    local sleep_time=$(bc <<< "scale=3; $duration/$steps")
+    
+    echo -ne "${colors[dim]}["
+    for ((i=0; i<steps; i++)); do
+        echo -ne "▓"
+        sleep $sleep_time
+    done
+    echo -e "]${colors[reset]}"
+}
+
+# Initialize Directory Structure
+init_directories() {
+    local dirs=(
+        "$XAMPP_HOME"
+        "$CONF_DIR"
+        "$LOG_DIR"
+        "$WWW_DIR"
+        "$BACKUP_DIR"
+        "$VHOSTS_DIR"
+        "$SSL_DIR"
+    )
+    
+    for dir in "${dirs[@]}"; do
+        if [[ ! -d "$dir" ]]; then
+            mkdir -p "$dir"
+            echo -e "${colors[green]}[✓] Created${colors[reset]} $dir"
+        fi
+    done
+}
+
+# Check and Install Dependencies
+install_dependencies() {
+    local packages=(
+        php
+        php-fpm
+        mariadb
+        apache2
+        nginx
+        python
+        openssl
+        curl
+        wget
+        git
+    )
+    
+    echo -e "\n${colors[cyan]}[*] Checking and installing dependencies...${colors[reset]}\n"
+    
+    for pkg in "${packages[@]}"; do
+        if ! command -v "$pkg" &> /dev/null; then
+            echo -e "${colors[yellow]}[!] Installing ${pkg}...${colors[reset]}"
+            pkg install "$pkg" -y &> /dev/null &
+            progress_bar 2
+            echo -e "${colors[green]}[✓] Installed ${pkg}${colors[reset]}"
+        fi
+    done
+}
+
+# Service Management Functions
+start_service() {
+    local service=$1
+    local port=${PORTS[$service]}
+    
+    case $service in
+        "php")
+            php -S "localhost:$port" -t "$WWW_DIR" > "$LOG_DIR/php.log" 2>&1 &
+            ;;
+        "mysql")
+            if [[ ! -d "$BASE_DIR/var/lib/mysql" ]]; then
+                mysql_install_db --user=root > /dev/null 2>&1
+            fi
+            mysqld --user=root > "$LOG_DIR/mysql.log" 2>&1 &
+            ;;
+        "apache")
+            apachectl start > "$LOG_DIR/apache.log" 2>&1
+            ;;
+        "nginx")
+            nginx -c "$CONF_DIR/nginx.conf" > "$LOG_DIR/nginx.log" 2>&1
+            ;;
+        *)
+            echo -e "${colors[red]}[×] Unknown service: $service${colors[reset]}"
+            return 1
+            ;;
+    esac
+    
+    if [ $? -eq 0 ]; then
+        echo -e "${colors[green]}[✓] Started $service on port $port${colors[reset]}"
+    else
+        echo -e "${colors[red]}[×] Failed to start $service${colors[reset]}"
+    fi
+}
+
+# Service Status Monitor
+monitor_services() {
+    show_banner
+    echo -e "${colors[cyan]}Service Status Monitor${colors[reset]}\n"
+    
+    printf "%-15s %-10s %-10s %-15s\n" "Service" "Port" "Status" "PID"
+    echo "------------------------------------------------"
+    
+    for service in "${!PORTS[@]}"; do
+        local port=${PORTS[$service]}
+        local pid=$(pgrep -f "$service")
+        local status="${colors[red]}Stopped${colors[reset]}"
+        
+        if [[ ! -z "$pid" ]]; then
+            status="${colors[green]}Running${colors[reset]}"
+        fi
+        
+        printf "%-15s %-10s %-10s %-15s\n" "$service" "$port" "$status" "${pid:-N/A}"
+    done
+}
+
+# Backup Function
+backup_data() {
+    local timestamp=$(date +%Y%m%d_%H%M%S)
+    local backup_file="${BACKUP_DIR}/xampp_backup_${timestamp}.tar.gz"
+    
+    echo -e "${colors[cyan]}[*] Creating backup...${colors[reset]}"
+    tar -czf "$backup_file" -C "$XAMPP_HOME" www &
+    progress_bar 3
+    
+    if [ $? -eq 0 ]; then
+        echo -e "${colors[green]}[✓] Backup created: $backup_file${colors[reset]}"
+    else
+        echo -e "${colors[red]}[×] Backup failed${colors[reset]}"
+    fi
+}
+
+# Main Menu
+show_menu() {
+    while true; do
+        show_banner
+        echo -e "${colors[cyan]}Main Menu:${colors[reset]}"
+        echo -e "${colors[yellow]}1${colors[reset]}) Start All Services"
+        echo -e "${colors[yellow]}2${colors[reset]}) Stop All Services"
+        echo -e "${colors[yellow]}3${colors[reset]}) Monitor Services"
+        echo -e "${colors[yellow]}4${colors[reset]}) Manage Individual Services"
+        echo -e "${colors[yellow]}5${colors[reset]}) Backup Data"
+        echo -e "${colors[yellow]}6${colors[reset]}) View Logs"
+        echo -e "${colors[yellow]}7${colors[reset]}) Configuration"
+        echo -e "${colors[yellow]}8${colors[reset]}) Visit Documentation"
+        echo -e "${colors[yellow]}0${colors[reset]}) Exit"
+        
+        read -p "Enter your choice: " choice
+        
+        case $choice in
+            1) start_all_services ;;
+            2) stop_all_services ;;
+            3) monitor_services ;;
+            4) service_submenu ;;
+            5) backup_data ;;
+            6) view_logs ;;
+            7) config_menu ;;
+            8) xdg-open "$DOCS_URL" 2>/dev/null || echo -e "${colors[yellow]}[!] Visit: $DOCS_URL${colors[reset]}" ;;
+            0) exit 0 ;;
+            *) echo -e "${colors[red]}[!] Invalid option${colors[reset]}" ;;
+        esac
+        
+        read -p "Press Enter to continue..."
+    done
+}
+
+# Initialize and run
+init_directories
+install_dependencies
+show_menu
